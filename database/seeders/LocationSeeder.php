@@ -24,10 +24,24 @@ class LocationSeeder extends Seeder
         $gresikId = DB::table('locations')->where('code', 'GRESIK')->value('id');
 
         foreach ([
-            ['code' => 'MANYAR', 'name' => 'Manyar'],
+            ['code' => 'BALONGPANGGANG', 'name' => 'Balongpanggang'],
+            ['code' => 'BENJENG', 'name' => 'Benjeng'],
             ['code' => 'BUNGAH', 'name' => 'Bungah'],
+            ['code' => 'CERME', 'name' => 'Cerme'],
+            ['code' => 'DRIYOREJO', 'name' => 'Driyorejo'],
+            ['code' => 'DUDUKSAMPEYAN', 'name' => 'Duduksampeyan'],
+            ['code' => 'DUKUN', 'name' => 'Dukun'],
+            ['code' => 'GRESIKKOTA', 'name' => 'Gresik'],
+            ['code' => 'KEBOMAS', 'name' => 'Kebomas'],
+            ['code' => 'KEDAMEAN', 'name' => 'Kedamean'],
+            ['code' => 'MANYAR', 'name' => 'Manyar'],
+            ['code' => 'MENGANTI', 'name' => 'Menganti'],
+            ['code' => 'PANCENG', 'name' => 'Panceng'],
+            ['code' => 'SANGKAPURA', 'name' => 'Sangkapura'],
             ['code' => 'SIDAYU', 'name' => 'Sidayu'],
+            ['code' => 'TAMBAK', 'name' => 'Tambak'],
             ['code' => 'UJUNGPANGKAH', 'name' => 'Ujungpangkah'],
+            ['code' => 'WRINGINANOM', 'name' => 'Wringinanom'],
         ] as $district) {
             DB::table('locations')->updateOrInsert(
                 ['code' => $district['code']],
