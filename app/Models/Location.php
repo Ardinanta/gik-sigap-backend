@@ -22,4 +22,9 @@ class Location extends Model
     {
         return $this->hasMany(User::class);
     }
+
+    public function buyerDemands(): HasMany
+    {
+        return $this->hasMany(BuyerDemand::class, 'target_location_id');
+    }
 }
