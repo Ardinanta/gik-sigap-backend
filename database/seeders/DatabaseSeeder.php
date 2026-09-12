@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             FishSizeSeeder::class,
             BuyerTypeSeeder::class,
             UserSeeder::class,
+            HarvestPlanSeeder::class,
         ]);
     }
 }

@@ -27,4 +27,9 @@ class Location extends Model
     {
         return $this->hasMany(BuyerDemand::class, 'target_location_id');
     }
+
+    public function harvestPlans(): HasMany
+    {
+        return $this->hasMany(HarvestPlan::class);
+    }
 }

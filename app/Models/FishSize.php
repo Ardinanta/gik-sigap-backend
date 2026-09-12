@@ -28,4 +28,9 @@ class FishSize extends Model
     {
         return $this->hasMany(BuyerDemand::class);
     }
+
+    public function harvestPlans(): HasMany
+    {
+        return $this->hasMany(HarvestPlan::class);
+    }
 }

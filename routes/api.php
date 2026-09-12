@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Auth\PasswordController;
 use App\Http\Controllers\Api\V1\BuyerDemandController;
+use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\FishSizeController;
 use App\Http\Controllers\LocationController;
 use Illuminate\Support\Facades\Route;
@@ -43,5 +44,8 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::apiResource('buyer-demands', BuyerDemandController::class)
             ->only(['index', 'store']);
+        Route::apiResource('catalog', CatalogController::class)
+            ->parameters(['catalog' => 'harvestPlan'])
+            ->only(['index', 'show']);
     });
 });
