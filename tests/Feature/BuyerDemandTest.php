@@ -3,7 +3,9 @@
 use App\Models\BuyerDemand;
 use App\Models\Commodity;
 use App\Models\FishSize;
+use App\Models\HarvestPlan;
 use App\Models\Location;
+use App\Models\MatchResult;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -158,4 +160,131 @@ it('lists only the authenticated buyer demands using status filter and newest or
         ->assertJsonPath('meta.total', 2)
         ->assertJsonPath('data.0.notes', 'lebih baru')
         ->assertJsonMissing(['notes' => 'milik orang lain']);
+});
+
+it('requires authentication and the buyer role to delete a demand', function () {
+    $fixture = buyerDemandFixture();
+    $demand = BuyerDemand::query()->create([
+        'buyer_id' => $fixture['buyer']->id,
+        'commodity_id' => $fixture['commodity']->id,
+        'fish_size_id' => $fixture['fishSize']->id,
+        'required_volume_kg' => 100,
+        'need_start_date' => '2026-09-20',
+        'need_end_date' => '2026-09-27',
+        'status' => 'active',
+    ]);
+    $url = "/api/v1/buyer-demands/{$demand->id}";
+
+    $this->deleteJson($url)->assertUnauthorized();
+    $this->actingAs($fixture['farmer'])->deleteJson($url)->assertForbidden();
+
+    $this->assertNotSoftDeleted($demand);
+});
+
+it('does not reveal or delete another buyer demand', function () {
+    $fixture = buyerDemandFixture();
+    $otherBuyer = User::factory()->create();
+    $otherBuyer->roles()->attach(Role::query()->where('code', 'buyer')->value('id'), ['created_at' => now()]);
+    $demand = BuyerDemand::query()->create([
+        'buyer_id' => $fixture['buyer']->id,
+        'commodity_id' => $fixture['commodity']->id,
+        'fish_size_id' => $fixture['fishSize']->id,
+        'required_volume_kg' => 100,
+        'need_start_date' => '2026-09-20',
+        'need_end_date' => '2026-09-27',
+        'status' => 'active',
+    ]);
+
+    $this->actingAs($otherBuyer)
+        ->deleteJson("/api/v1/buyer-demands/{$demand->id}")
+        ->assertNotFound();
+
+    $this->assertDatabaseHas('buyer_demands', [
+        'id' => $demand->id,
+        'status' => 'active',
+        'deleted_at' => null,
+    ]);
+});
+
+it('archives an active demand and expires only its active recommendations', function () {
+    $fixture = buyerDemandFixture();
+    $demand = BuyerDemand::query()->create([
+        'buyer_id' => $fixture['buyer']->id,
+        'commodity_id' => $fixture['commodity']->id,
+        'fish_size_id' => $fixture['fishSize']->id,
+        'required_volume_kg' => 100,
+        'need_start_date' => '2026-09-20',
+        'need_end_date' => '2026-09-27',
+        'status' => 'active',
+    ]);
+    $plan = HarvestPlan::query()->create([
+        'farmer_id' => $fixture['farmer']->id,
+        'location_id' => $fixture['location']->id,
+        'commodity_id' => $fixture['commodity']->id,
+        'fish_size_id' => $fixture['fishSize']->id,
+        'harvest_date' => '2026-09-22',
+        'estimated_volume_kg' => 500,
+        'pond_name' => 'Tambak Uji',
+        'status' => 'planned',
+    ]);
+    $recommended = MatchResult::query()->create([
+        'harvest_plan_id' => $plan->id,
+        'buyer_demand_id' => $demand->id,
+        'match_score' => 90,
+        'matched_volume_kg' => 100,
+        'algorithm_version' => 'v1',
+        'status' => 'recommended',
+    ]);
+    $expired = MatchResult::query()->create([
+        'harvest_plan_id' => $plan->id,
+        'buyer_demand_id' => $demand->id,
+        'match_score' => 80,
+        'matched_volume_kg' => 100,
+        'algorithm_version' => 'legacy',
+        'status' => 'expired',
+    ]);
+
+    $this->actingAs($fixture['buyer'])
+        ->deleteJson("/api/v1/buyer-demands/{$demand->id}")
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('message', 'Kebutuhan bandeng berhasil dihapus.');
+
+    $this->assertSoftDeleted($demand);
+    $this->assertDatabaseHas('buyer_demands', [
+        'id' => $demand->id,
+        'status' => 'cancelled',
+    ]);
+    $this->assertDatabaseHas('matches', [
+        'id' => $recommended->id,
+        'status' => 'expired',
+    ]);
+    $this->assertDatabaseHas('matches', [
+        'id' => $expired->id,
+        'status' => 'expired',
+    ]);
+});
+
+it('rejects deleting an inactive demand without changing it', function () {
+    $fixture = buyerDemandFixture();
+    $demand = BuyerDemand::query()->create([
+        'buyer_id' => $fixture['buyer']->id,
+        'commodity_id' => $fixture['commodity']->id,
+        'fish_size_id' => $fixture['fishSize']->id,
+        'required_volume_kg' => 100,
+        'need_start_date' => '2026-09-20',
+        'need_end_date' => '2026-09-27',
+        'status' => 'fulfilled',
+    ]);
+
+    $this->actingAs($fixture['buyer'])
+        ->deleteJson("/api/v1/buyer-demands/{$demand->id}")
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('demand');
+
+    $this->assertDatabaseHas('buyer_demands', [
+        'id' => $demand->id,
+        'status' => 'fulfilled',
+        'deleted_at' => null,
+    ]);
 });

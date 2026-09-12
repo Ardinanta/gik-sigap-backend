@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             BuyerTypeSeeder::class,
             UserSeeder::class,
             HarvestPlanSeeder::class,
+            BuyerDemandSeeder::class,
         ]);
     }
 }

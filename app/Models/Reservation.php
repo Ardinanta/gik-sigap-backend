@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['harvest_plan_id', 'buyer_id', 'buyer_demand_id', 'reserved_volume_kg', 'status', 'expires_at', 'confirmed_at', 'cancelled_at'])]
+#[Fillable(['harvest_plan_id', 'buyer_id', 'buyer_demand_id', 'reserved_volume_kg', 'notes', 'status', 'expires_at', 'confirmed_at', 'cancelled_at'])]
 class Reservation extends Model
 {
     protected function casts(): array

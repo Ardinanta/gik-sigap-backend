@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\BuyerDemand\DestroyBuyerDemandRequest;
 use App\Http\Requests\Api\V1\BuyerDemand\IndexBuyerDemandRequest;
 use App\Http\Requests\Api\V1\BuyerDemand\StoreBuyerDemandRequest;
 use App\Http\Resources\Api\V1\BuyerDemandResource;
+use App\Models\BuyerDemand;
 use App\Models\User;
 use App\Services\BuyerDemandService;
 use Illuminate\Http\JsonResponse;
@@ -46,5 +48,18 @@ class BuyerDemandController extends Controller
             'message' => 'Kebutuhan bandeng berhasil disimpan.',
             'data' => new BuyerDemandResource($demand),
         ], 201);
+    }
+
+    public function destroy(DestroyBuyerDemandRequest $request, BuyerDemand $buyerDemand): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user instanceof User, 401);
+
+        $this->buyerDemandService->delete($user, $buyerDemand);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Kebutuhan bandeng berhasil dihapus.',
+        ]);
     }
 }

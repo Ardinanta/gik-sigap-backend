@@ -49,6 +49,11 @@ class User extends Authenticatable
         return $this->hasMany(HarvestPlan::class, 'farmer_id');
     }
 
+    public function reservations(): HasMany
+    {
+        return $this->hasMany(Reservation::class, 'buyer_id');
+    }
+
     public function hasRole(string $role): bool
     {
         return $this->roles->contains('code', $role);

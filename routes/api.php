@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\V1\Auth\PasswordController;
 use App\Http\Controllers\Api\V1\BuyerDemandController;
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\FishSizeController;
+use App\Http\Controllers\Api\V1\MatchingController;
+use App\Http\Controllers\Api\V1\ReservationController;
 use App\Http\Controllers\LocationController;
 use Illuminate\Support\Facades\Route;
 
@@ -43,9 +45,17 @@ Route::prefix('v1')->group(function (): void {
 
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::apiResource('buyer-demands', BuyerDemandController::class)
-            ->only(['index', 'store']);
+            ->only(['index', 'store', 'destroy']);
         Route::apiResource('catalog', CatalogController::class)
             ->parameters(['catalog' => 'harvestPlan'])
             ->only(['index', 'show']);
+        Route::get('/buyer-demands/{buyerDemand}/matches', [MatchingController::class, 'index'])
+            ->name('api.v1.buyer-demands.matches.index');
+        Route::post('/buyer-demands/{buyerDemand}/matches/generate', [MatchingController::class, 'generate'])
+            ->name('api.v1.buyer-demands.matches.generate');
+        Route::get('/matches/{matchResult}', [MatchingController::class, 'show'])
+            ->name('api.v1.matches.show');
+        Route::post('/harvest-plans/{harvestPlan}/reservations', [ReservationController::class, 'store'])
+            ->name('api.v1.harvest-plans.reservations.store');
     });
 });
