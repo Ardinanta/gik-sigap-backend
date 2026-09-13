@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\V1\Auth;
 
+use App\Support\IndonesianPhoneNumber;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
@@ -15,9 +16,11 @@ class RegisterRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $phone = trim((string) $this->input('phone'));
+
         $this->merge([
             'email' => mb_strtolower(trim((string) $this->input('email'))),
-            'phone' => trim((string) $this->input('phone')),
+            'phone' => IndonesianPhoneNumber::normalize($phone) ?? $phone,
         ]);
     }
 
@@ -26,7 +29,7 @@ class RegisterRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:150'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique('users', 'email')],
-            'phone' => ['required', 'string', 'max:30', 'regex:/^\+?[0-9][0-9\s-]{7,28}[0-9]$/'],
+            'phone' => ['required', 'string', 'regex:/^628[0-9]{7,12}$/', Rule::unique('users', 'phone')],
             'location_id' => [
                 'required',
                 'integer',
@@ -44,6 +47,7 @@ class RegisterRequest extends FormRequest
         return [
             'email.unique' => 'Email sudah terdaftar.',
             'phone.regex' => 'Format nomor WhatsApp tidak valid.',
+            'phone.unique' => 'Nomor WhatsApp sudah digunakan.',
             'location_id.exists' => 'Kecamatan yang dipilih tidak tersedia.',
             'role.in' => 'Jenis akun harus Petambak atau Pembeli.',
             'password.confirmed' => 'Konfirmasi kata sandi tidak cocok.',

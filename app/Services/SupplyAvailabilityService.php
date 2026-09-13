@@ -23,12 +23,10 @@ class SupplyAvailabilityService
 
     public function whereAvailable(Builder $query): Builder
     {
-        return $query->whereRaw('(estimated_volume_kg - COALESCE((SELECT SUM(partnerships.agreed_volume_kg) FROM partnerships INNER JOIN matches ON matches.id = partnerships.match_id WHERE matches.harvest_plan_id = harvest_plans.id AND partnerships.status IN (?, ?)), 0) - COALESCE((SELECT SUM(reservations.reserved_volume_kg) FROM reservations WHERE reservations.harvest_plan_id = harvest_plans.id AND (reservations.status = ? OR (reservations.status = ? AND (reservations.expires_at IS NULL OR reservations.expires_at > ?)))), 0)) > 0', [
+        return $query->whereRaw('(estimated_volume_kg - COALESCE((SELECT SUM(partnerships.agreed_volume_kg) FROM partnerships INNER JOIN matches ON matches.id = partnerships.match_id WHERE matches.harvest_plan_id = harvest_plans.id AND partnerships.status IN (?, ?)), 0) - COALESCE((SELECT SUM(reservations.reserved_volume_kg) FROM reservations WHERE reservations.harvest_plan_id = harvest_plans.id AND reservations.status = ?), 0)) > 0', [
             'matched',
             'completed',
             'confirmed',
-            'pending',
-            now(),
         ]);
     }
 
@@ -54,15 +52,6 @@ class SupplyAvailabilityService
 
     private function activeReservations(Builder $query): Builder
     {
-        return $query->where(function (Builder $query): void {
-            $query->where('status', 'confirmed')
-                ->orWhere(function (Builder $query): void {
-                    $query->where('status', 'pending')
-                        ->where(function (Builder $query): void {
-                            $query->whereNull('expires_at')
-                                ->orWhere('expires_at', '>', now());
-                        });
-                });
-        });
+        return $query->where('status', 'confirmed');
     }
 }

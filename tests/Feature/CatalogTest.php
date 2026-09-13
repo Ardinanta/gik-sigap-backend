@@ -12,6 +12,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
 
@@ -96,7 +97,7 @@ it('validates catalog filters against active district and bandeng size', functio
         ->assertJsonValidationErrors(['location_id', 'fish_size_id', 'end_date']);
 });
 
-it('subtracts only finalized allocations and active reservations without duplicating totals', function () {
+it('subtracts only accepted commitments without counting pending requests', function () {
     $fixture = catalogFixture();
     $plan = createCatalogPlan($fixture);
     $demand = BuyerDemand::query()->create([
@@ -145,8 +146,8 @@ it('subtracts only finalized allocations and active reservations without duplica
         ->getJson('/api/v1/catalog')
         ->assertOk()
         ->assertJsonPath('data.0.allocated_volume_kg', '300.00')
-        ->assertJsonPath('data.0.reserved_volume_kg', '150.00')
-        ->assertJsonPath('data.0.available_volume_kg', '550.00');
+        ->assertJsonPath('data.0.reserved_volume_kg', '100.00')
+        ->assertJsonPath('data.0.available_volume_kg', '600.00');
 });
 
 it('excludes exhausted plans and protects catalog detail', function () {
@@ -169,18 +170,62 @@ it('excludes exhausted plans and protects catalog detail', function () {
     $this->actingAs($fixture['buyer'])->getJson("/api/v1/catalog/{$exhausted->id}")->assertNotFound();
 });
 
+it('returns seller photos without exposing internal storage metadata', function () {
+    Storage::fake('public');
+    $fixture = catalogFixture();
+    $planWithPhoto = createCatalogPlan($fixture, [
+        'pond_name' => 'Tambak Berfoto',
+        'photo_path' => 'harvest-plans/catalog-photo.jpg',
+        'photo_original_name' => 'foto-asli.jpg',
+        'photo_mime_type' => 'image/jpeg',
+    ]);
+    $planWithoutPhoto = createCatalogPlan($fixture, [
+        'pond_name' => 'Tambak Tanpa Foto',
+        'harvest_date' => '2026-09-21',
+    ]);
+
+    $listResponse = $this->actingAs($fixture['buyer'])
+        ->getJson('/api/v1/catalog')
+        ->assertOk()
+        ->assertJsonPath('data.0.id', $planWithPhoto->id)
+        ->assertJsonPath('data.0.photo_url', Storage::disk('public')->url('harvest-plans/catalog-photo.jpg'))
+        ->assertJsonPath('data.1.id', $planWithoutPhoto->id)
+        ->assertJsonPath('data.1.photo_url', null);
+
+    $detailResponse = $this->actingAs($fixture['buyer'])
+        ->getJson("/api/v1/catalog/{$planWithPhoto->id}")
+        ->assertOk()
+        ->assertJsonPath('data.photo_url', Storage::disk('public')->url('harvest-plans/catalog-photo.jpg'));
+
+    foreach ([$listResponse, $detailResponse] as $response) {
+        expect($response->getContent())
+            ->not->toContain('photo_path')
+            ->not->toContain('photo_original_name')
+            ->not->toContain('photo_mime_type')
+            ->not->toContain('foto-asli.jpg');
+    }
+});
+
 it('returns a safe whatsapp link without exposing contact pii', function () {
     $fixture = catalogFixture();
     $plan = createCatalogPlan($fixture);
 
-    $response = $this->actingAs($fixture['buyer'])
+    $listResponse = $this->actingAs($fixture['buyer'])
+        ->getJson('/api/v1/catalog')
+        ->assertOk()
+        ->assertJsonPath('data.0.id', $plan->id)
+        ->assertJsonPath('data.0.whatsapp_url', fn (string $url) => str_starts_with($url, 'https://wa.me/6281234567890?text='));
+
+    $detailResponse = $this->actingAs($fixture['buyer'])
         ->getJson("/api/v1/catalog/{$plan->id}")
         ->assertOk()
         ->assertJsonPath('data.farmer_name', 'Budi Tambak')
         ->assertJsonPath('data.whatsapp_url', fn (string $url) => str_starts_with($url, 'https://wa.me/6281234567890?text='));
 
-    expect($response->json('data'))->not->toHaveKeys(['phone', 'email']);
-    expect($response->getContent())->not->toContain('0812-3456-7890');
+    expect($listResponse->json('data.0'))->not->toHaveKeys(['phone', 'email']);
+    expect($detailResponse->json('data'))->not->toHaveKeys(['phone', 'email']);
+    expect($listResponse->getContent())->not->toContain('0812-3456-7890');
+    expect($detailResponse->getContent())->not->toContain('0812-3456-7890');
 
     $fixture['farmer']->update(['phone' => 'tidak-valid']);
     $this->actingAs($fixture['buyer'])

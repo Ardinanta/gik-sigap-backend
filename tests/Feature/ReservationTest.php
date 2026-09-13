@@ -4,6 +4,7 @@ use App\Models\BuyerDemand;
 use App\Models\MatchResult;
 use App\Models\Partnership;
 use App\Models\Reservation;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -106,6 +107,90 @@ it('uses the latest available volume and rejects over reservation', function () 
     $this->actingAs($fixture['buyer'])
         ->postJson("/api/v1/harvest-plans/{$plan->id}/reservations", ['volume_kg' => 500])
         ->assertCreated();
+});
+
+it('lists only owned reservations and normalizes expired pending entries', function () {
+    $fixture = catalogFixture();
+    $plan = createCatalogPlan($fixture);
+    $otherBuyer = User::factory()->create();
+    $otherBuyer->roles()->attach($fixture['buyer']->roles->first()->id, ['created_at' => now()]);
+
+    $active = Reservation::query()->create([
+        'harvest_plan_id' => $plan->id,
+        'buyer_id' => $fixture['buyer']->id,
+        'reserved_volume_kg' => 100,
+        'status' => 'pending',
+        'expires_at' => now()->addHour(),
+    ]);
+    $expired = Reservation::query()->create([
+        'harvest_plan_id' => $plan->id,
+        'buyer_id' => $fixture['buyer']->id,
+        'reserved_volume_kg' => 50,
+        'status' => 'pending',
+        'expires_at' => now()->subMinute(),
+    ]);
+    Reservation::query()->create([
+        'harvest_plan_id' => $plan->id,
+        'buyer_id' => $otherBuyer->id,
+        'reserved_volume_kg' => 75,
+        'status' => 'pending',
+        'expires_at' => now()->addHour(),
+    ]);
+
+    $this->actingAs($fixture['buyer'])
+        ->getJson('/api/v1/reservations?status=pending')
+        ->assertOk()
+        ->assertJsonPath('meta.total', 1)
+        ->assertJsonPath('data.0.id', $active->id)
+        ->assertJsonMissing(['id' => $expired->id]);
+
+    $this->assertDatabaseHas('reservations', ['id' => $expired->id, 'status' => 'expired']);
+});
+
+it('cancels only a current pending reservation owned by buyer', function () {
+    $fixture = catalogFixture();
+    $plan = createCatalogPlan($fixture);
+    $reservation = Reservation::query()->create([
+        'harvest_plan_id' => $plan->id,
+        'buyer_id' => $fixture['buyer']->id,
+        'reserved_volume_kg' => 100,
+        'status' => 'pending',
+        'expires_at' => now()->addHour(),
+    ]);
+
+    $this->actingAs($fixture['buyer'])
+        ->deleteJson("/api/v1/reservations/{$reservation->id}")
+        ->assertOk()
+        ->assertJsonPath('data.status', 'cancelled');
+
+    $this->assertDatabaseHas('reservations', [
+        'id' => $reservation->id,
+        'status' => 'cancelled',
+    ]);
+    expect($reservation->fresh()->cancelled_at)->not->toBeNull();
+
+    $this->actingAs($fixture['buyer'])
+        ->deleteJson("/api/v1/reservations/{$reservation->id}")
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('reservation');
+});
+
+it('hides another buyers reservation from cancellation', function () {
+    $fixture = catalogFixture();
+    $plan = createCatalogPlan($fixture);
+    $otherBuyer = User::factory()->create();
+    $otherBuyer->roles()->attach($fixture['buyer']->roles->first()->id, ['created_at' => now()]);
+    $reservation = Reservation::query()->create([
+        'harvest_plan_id' => $plan->id,
+        'buyer_id' => $fixture['buyer']->id,
+        'reserved_volume_kg' => 100,
+        'status' => 'pending',
+        'expires_at' => now()->addHour(),
+    ]);
+
+    $this->actingAs($otherBuyer)
+        ->deleteJson("/api/v1/reservations/{$reservation->id}")
+        ->assertNotFound();
 });
 
 it('rejects reservations for unavailable plans', function (array $attributes) {

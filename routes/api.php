@@ -4,9 +4,19 @@ use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Auth\PasswordController;
 use App\Http\Controllers\Api\V1\BuyerDemandController;
 use App\Http\Controllers\Api\V1\CatalogController;
+use App\Http\Controllers\Api\V1\FarmerHarvestPlanController;
+use App\Http\Controllers\Api\V1\FarmerMatchingController;
+use App\Http\Controllers\Api\V1\FarmerPartnershipController;
+use App\Http\Controllers\Api\V1\FarmerReservationController;
+use App\Http\Controllers\Api\V1\FarmerRiskController;
+use App\Http\Controllers\Api\V1\FarmerTransactionController;
 use App\Http\Controllers\Api\V1\FishSizeController;
+use App\Http\Controllers\Api\V1\HandoverController;
 use App\Http\Controllers\Api\V1\MatchingController;
+use App\Http\Controllers\Api\V1\NotificationController;
+use App\Http\Controllers\Api\V1\PartnershipController;
 use App\Http\Controllers\Api\V1\ReservationController;
+use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\LocationController;
 use Illuminate\Support\Facades\Route;
 
@@ -44,6 +54,27 @@ Route::prefix('v1')->group(function (): void {
     });
 
     Route::middleware('auth:sanctum')->group(function (): void {
+        Route::get('/notifications', [NotificationController::class, 'index'])
+            ->name('api.v1.notifications.index');
+        Route::patch('/notifications/read-all', [NotificationController::class, 'markAllAsRead'])
+            ->name('api.v1.notifications.read-all');
+        Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])
+            ->whereUuid('notification')
+            ->name('api.v1.notifications.read');
+
+        Route::prefix('farmer')->name('api.v1.farmer.')->group(function (): void {
+            Route::get('/matches', FarmerMatchingController::class)->name('matches.index');
+            Route::get('/risks', FarmerRiskController::class)->name('risks.index');
+            Route::get('/partnerships', [FarmerPartnershipController::class, 'index'])->name('partnerships.index');
+            Route::post('/partnerships/{partnership}/confirmation', [FarmerPartnershipController::class, 'confirm'])->name('partnerships.confirmation.store');
+            Route::get('/partnerships/{partnership}', [FarmerPartnershipController::class, 'show'])->name('partnerships.show');
+            Route::get('/reservations', [FarmerReservationController::class, 'index'])->name('reservations.index');
+            Route::post('/reservations/{reservation}/confirmation', [FarmerReservationController::class, 'confirm'])->name('reservations.confirmation.store');
+            Route::get('/transactions', FarmerTransactionController::class)->name('transactions.index');
+            Route::apiResource('harvest-plans', FarmerHarvestPlanController::class)
+                ->parameters(['harvest-plans' => 'harvestPlan'])
+                ->only(['index', 'store', 'show', 'update']);
+        });
         Route::apiResource('buyer-demands', BuyerDemandController::class)
             ->only(['index', 'store', 'destroy']);
         Route::apiResource('catalog', CatalogController::class)
@@ -55,7 +86,27 @@ Route::prefix('v1')->group(function (): void {
             ->name('api.v1.buyer-demands.matches.generate');
         Route::get('/matches/{matchResult}', [MatchingController::class, 'show'])
             ->name('api.v1.matches.show');
+        Route::post('/matches/{matchResult}/partnership', [PartnershipController::class, 'store'])
+            ->name('api.v1.matches.partnership.store');
+        Route::get('/partnerships', [PartnershipController::class, 'index'])
+            ->name('api.v1.partnerships.index');
+        Route::get('/partnerships/{partnership}/handover', [HandoverController::class, 'show'])
+            ->name('api.v1.partnerships.handover.show');
+        Route::post('/partnerships/{partnership}/handover', [HandoverController::class, 'store'])
+            ->name('api.v1.partnerships.handover.store');
+        Route::get('/partnerships/{partnership}', [PartnershipController::class, 'show'])
+            ->name('api.v1.partnerships.show');
+        Route::get('/partnerships/{partnership}/history', [PartnershipController::class, 'history'])
+            ->name('api.v1.partnerships.history');
+        Route::get('/reservations', [ReservationController::class, 'index'])
+            ->name('api.v1.reservations.index');
+        Route::delete('/reservations/{reservation}', [ReservationController::class, 'destroy'])
+            ->name('api.v1.reservations.destroy');
         Route::post('/harvest-plans/{harvestPlan}/reservations', [ReservationController::class, 'store'])
             ->name('api.v1.harvest-plans.reservations.store');
+        Route::get('/transactions', [TransactionController::class, 'index'])
+            ->name('api.v1.transactions.index');
+        Route::get('/transactions/{transaction}', [TransactionController::class, 'show'])
+            ->name('api.v1.transactions.show');
     });
 });

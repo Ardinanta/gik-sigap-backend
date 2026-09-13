@@ -3,10 +3,10 @@
 namespace App\Services;
 
 use App\Models\HarvestPlan;
+use App\Support\IndonesianPhoneNumber;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Str;
 
 class CatalogService
 {
@@ -56,19 +56,9 @@ class CatalogService
 
     public function whatsappUrl(HarvestPlan $harvestPlan): ?string
     {
-        $phone = preg_replace('/\D+/', '', (string) $harvestPlan->farmer?->phone);
+        $phone = IndonesianPhoneNumber::normalize((string) $harvestPlan->farmer?->phone);
 
-        if (! $phone) {
-            return null;
-        }
-
-        if (Str::startsWith($phone, '0')) {
-            $phone = '62'.substr($phone, 1);
-        } elseif (Str::startsWith($phone, '8')) {
-            $phone = '62'.$phone;
-        }
-
-        if (! preg_match('/^62[0-9]{8,13}$/', $phone)) {
+        if ($phone === null) {
             return null;
         }
 

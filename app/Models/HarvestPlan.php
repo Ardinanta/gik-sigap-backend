@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['farmer_id', 'location_id', 'commodity_id', 'fish_size_id', 'harvest_date', 'estimated_volume_kg', 'asking_price_per_kg', 'pond_name', 'pond_address', 'latitude', 'longitude', 'status', 'notes'])]
+#[Fillable(['farmer_id', 'location_id', 'commodity_id', 'fish_size_id', 'harvest_date', 'estimated_volume_kg', 'asking_price_per_kg', 'pond_name', 'pond_address', 'latitude', 'longitude', 'status', 'notes', 'photo_path', 'photo_original_name', 'photo_mime_type'])]
 class HarvestPlan extends Model
 {
     use HasFactory, SoftDeletes;

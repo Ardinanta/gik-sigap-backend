@@ -17,9 +17,11 @@ class DatabaseSeeder extends Seeder
             CommoditySeeder::class,
             FishSizeSeeder::class,
             BuyerTypeSeeder::class,
+            RiskThresholdSeeder::class,
             UserSeeder::class,
             HarvestPlanSeeder::class,
             BuyerDemandSeeder::class,
+            PartnershipSeeder::class,
         ]);
     }
 }

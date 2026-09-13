@@ -21,6 +21,7 @@ class HarvestPlanSeeder extends Seeder
             ['pond_name' => 'Tambak Mina Bahari', 'location' => 'BUNGAH', 'size' => 'large', 'days' => 12, 'volume' => 1850, 'price' => 34000, 'status' => 'planned'],
             ['pond_name' => 'Tambak Pesisir Makmur', 'location' => 'SIDAYU', 'size' => 'small', 'days' => 18, 'volume' => 4500, 'price' => null, 'status' => 'planned'],
             ['pond_name' => 'Tambak Ujung Jaya', 'location' => 'UJUNGPANGKAH', 'size' => 'medium', 'days' => 25, 'volume' => 2700, 'price' => 32500, 'status' => 'planned'],
+            ['pond_name' => 'Tambak Harapan Jaya', 'location' => 'MANYAR', 'size' => 'medium', 'days' => 20, 'volume' => 6000, 'price' => 32000, 'status' => 'planned'],
             ['pond_name' => 'Tambak Panen Selesai', 'location' => 'MANYAR', 'size' => 'large', 'days' => 3, 'volume' => 1000, 'price' => 33000, 'status' => 'completed'],
         ];
 

@@ -5,6 +5,7 @@ use App\Models\Commodity;
 use App\Models\FishSize;
 use App\Models\HarvestPlan;
 use App\Models\Location;
+use App\Models\Reservation;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -85,6 +86,29 @@ it('generates ranked recommendations with score breakdown and no raw pii', funct
     ]);
 });
 
+it('keeps a whole kilogram request when availability differs by one hundredth', function () {
+    Carbon::setTestNow('2026-09-12');
+    $fixture = matchingFixture();
+    $fixture['demand']->update(['required_volume_kg' => 100]);
+    $fixture['plan']->update(['estimated_volume_kg' => 100]);
+    Reservation::query()->create([
+        'harvest_plan_id' => $fixture['plan']->id,
+        'buyer_id' => $fixture['buyer']->id,
+        'reserved_volume_kg' => 0.01,
+        'status' => 'confirmed',
+    ]);
+
+    $this->actingAs($fixture['buyer'])
+        ->postJson("/api/v1/buyer-demands/{$fixture['demand']->id}/matches/generate")
+        ->assertOk()
+        ->assertJsonPath('data.0.matched_volume_kg', '100.00');
+
+    $this->assertDatabaseHas('matches', [
+        'buyer_demand_id' => $fixture['demand']->id,
+        'matched_volume_kg' => 100,
+    ]);
+});
+
 it('uses size and demand period as hard filters', function () {
     Carbon::setTestNow('2026-09-12');
     $fixture = matchingFixture();
@@ -143,4 +167,54 @@ it('rejects generation for an inactive demand', function () {
         ->postJson("/api/v1/buyer-demands/{$fixture['demand']->id}/matches/generate")
         ->assertUnprocessable()
         ->assertJsonValidationErrors('demand');
+});
+
+it('returns buyer recommendations only for the signed in farmers plans', function () {
+    Carbon::setTestNow('2026-09-12');
+    $fixture = matchingFixture();
+    $fixture['buyer']->update(['phone' => '0813-4567-8901']);
+    $this->actingAs($fixture['buyer'])
+        ->postJson("/api/v1/buyer-demands/{$fixture['demand']->id}/matches/generate")
+        ->assertOk();
+
+    $response = $this->actingAs($fixture['farmer'])
+        ->getJson('/api/v1/farmer/matches')
+        ->assertOk()
+        ->assertJsonPath('meta.total', 1)
+        ->assertJsonPath('data.0.buyer.name', $fixture['buyer']->name)
+        ->assertJsonPath('data.0.demand.required_volume_kg', '5000.00')
+        ->assertJsonPath('data.0.harvest_plan.id', $fixture['plan']->id)
+        ->assertJsonPath('data.0.buyer.whatsapp_url', fn ($url) => str_starts_with($url, 'https://wa.me/6281345678901?text='));
+
+    expect($response->getContent())
+        ->not->toContain($fixture['buyer']->phone)
+        ->not->toContain($fixture['buyer']->email);
+
+    $otherFarmer = User::factory()->create();
+    $otherFarmer->roles()->attach(Role::query()->where('code', 'farmer')->first(), ['created_at' => now()]);
+    $this->actingAs($otherFarmer)->getJson('/api/v1/farmer/matches')->assertOk()->assertJsonCount(0, 'data');
+});
+
+it('requires farmer role and validates farmer recommendation filters', function () {
+    $fixture = matchingFixture();
+
+    $this->getJson('/api/v1/farmer/matches')->assertUnauthorized();
+    $this->actingAs($fixture['buyer'])->getJson('/api/v1/farmer/matches')->assertForbidden();
+    $this->actingAs($fixture['farmer'])
+        ->getJson('/api/v1/farmer/matches?harvest_plan_id=invalid&per_page=101')
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['harvest_plan_id', 'per_page']);
+});
+
+it('filters buyer recommendations by an owned harvest plan id', function () {
+    Carbon::setTestNow('2026-09-12');
+    $fixture = matchingFixture();
+    $this->actingAs($fixture['buyer'])->postJson("/api/v1/buyer-demands/{$fixture['demand']->id}/matches/generate")->assertOk();
+
+    $this->actingAs($fixture['farmer'])
+        ->getJson("/api/v1/farmer/matches?harvest_plan_id={$fixture['plan']->id}")
+        ->assertOk()->assertJsonCount(1, 'data');
+    $this->actingAs($fixture['farmer'])
+        ->getJson('/api/v1/farmer/matches?harvest_plan_id=999999')
+        ->assertOk()->assertJsonCount(0, 'data');
 });

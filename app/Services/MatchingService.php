@@ -33,6 +33,32 @@ class MatchingService
             ->withQueryString();
     }
 
+    /** @return LengthAwarePaginator<MatchResult> */
+    public function paginateForFarmer(User $farmer, ?int $harvestPlanId, int $perPage = 12): LengthAwarePaginator
+    {
+        return MatchResult::query()
+            ->whereHas('harvestPlan', fn (Builder $query) => $query
+                ->where('farmer_id', $farmer->id)
+                ->where('status', 'planned')
+                ->when($harvestPlanId, fn (Builder $query, int $id) => $query->whereKey($id)))
+            ->whereHas('buyerDemand', fn (Builder $query) => $query->where('status', 'active'))
+            ->where('matches.algorithm_version', config('matching.algorithm_version', 'v1'))
+            ->where('matches.status', 'recommended')
+            ->with([
+                'harvestPlan:id,farmer_id,fish_size_id,pond_name,estimated_volume_kg,harvest_date',
+                'harvestPlan.fishSize:id,code,name',
+                'buyerDemand:id,buyer_id,target_location_id,fish_size_id,required_volume_kg,need_start_date,need_end_date',
+                'buyerDemand.buyer:id,name,phone',
+                'buyerDemand.fishSize:id,code,name',
+                'buyerDemand.targetLocation:id,code,name',
+            ])
+            ->orderByDesc('match_score')
+            ->orderByDesc('matched_at')
+            ->orderByDesc('id')
+            ->paginate($perPage)
+            ->withQueryString();
+    }
+
     /** @return Collection<int, MatchResult> */
     public function generate(User $buyer, BuyerDemand $demand): Collection
     {
@@ -46,7 +72,9 @@ class MatchingService
 
         $version = (string) config('matching.algorithm_version', 'v1');
         $minimumScore = (float) config('matching.minimum_score', 60);
+        $now = now();
         $validIds = [];
+        $upsertRows = [];
 
         foreach ($this->candidates($demand)->get() as $plan) {
             $available = max(
@@ -62,21 +90,32 @@ class MatchingService
                 continue;
             }
 
-            $match = MatchResult::query()->updateOrCreate(
-                [
-                    'harvest_plan_id' => $plan->id,
-                    'buyer_demand_id' => $demand->id,
-                    'algorithm_version' => $version,
-                ],
-                [
-                    'match_score' => $score,
-                    'matched_volume_kg' => min($available, (float) $demand->required_volume_kg),
-                    'score_breakdown' => $breakdown,
-                    'status' => 'recommended',
-                    'matched_at' => now(),
-                ],
+            $upsertRows[] = [
+                'harvest_plan_id' => $plan->id,
+                'buyer_demand_id' => $demand->id,
+                'algorithm_version' => $version,
+                'match_score' => $score,
+                'matched_volume_kg' => $this->matchedVolume($available, (float) $demand->required_volume_kg),
+                'score_breakdown' => json_encode($breakdown),
+                'status' => 'recommended',
+                'matched_at' => $now,
+            ];
+        }
+
+        if ($upsertRows !== []) {
+            MatchResult::upsert(
+                $upsertRows,
+                ['harvest_plan_id', 'buyer_demand_id', 'algorithm_version'],
+                ['match_score', 'matched_volume_kg', 'score_breakdown', 'status', 'matched_at'],
             );
-            $validIds[] = $match->id;
+
+            $validIds = MatchResult::query()
+                ->where('buyer_demand_id', $demand->id)
+                ->where('algorithm_version', $version)
+                ->where('status', 'recommended')
+                ->whereIn('harvest_plan_id', array_column($upsertRows, 'harvest_plan_id'))
+                ->pluck('id')
+                ->all();
         }
 
         $demand->matches()
@@ -87,6 +126,18 @@ class MatchingService
             ->update(['status' => 'expired']);
 
         return $this->resultsQuery($demand)->get();
+    }
+
+    private function matchedVolume(float $available, float $required): float
+    {
+        $available = round($available, 2);
+        $required = round($required, 2);
+
+        if ($required > $available && round($required - $available, 2) <= 0.01) {
+            return $required;
+        }
+
+        return min($available, $required);
     }
 
     public function findForBuyer(User $buyer, MatchResult $match): MatchResult
@@ -140,9 +191,11 @@ class MatchingService
     private function resultsQuery(BuyerDemand $demand): Builder
     {
         $query = MatchResult::query()
-            ->where('buyer_demand_id', $demand->id)
-            ->where('algorithm_version', config('matching.algorithm_version', 'v1'))
-            ->where('status', 'recommended')
+            ->join('harvest_plans', 'harvest_plans.id', '=', 'matches.harvest_plan_id')
+            ->where('matches.buyer_demand_id', $demand->id)
+            ->where('matches.algorithm_version', config('matching.algorithm_version', 'v1'))
+            ->where('matches.status', 'recommended')
+            ->select('matches.*')
             ->with([
                 'harvestPlan' => fn (BelongsTo $query) => $this->availability->withTotals($query->getQuery())
                     ->with(['farmer:id,name,phone', 'location:id,code,name', 'fishSize:id,code,name']),
@@ -150,9 +203,7 @@ class MatchingService
 
         return $query
             ->orderByDesc('match_score')
-            ->orderBy(
-                HarvestPlan::query()->select('harvest_date')->whereColumn('harvest_plans.id', 'matches.harvest_plan_id'),
-            )
+            ->orderBy('harvest_plans.harvest_date')
             ->orderBy('id');
     }
 }

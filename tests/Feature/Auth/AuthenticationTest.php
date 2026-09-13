@@ -3,6 +3,7 @@
 use App\Models\Location;
 use App\Models\Role;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 
@@ -57,7 +58,8 @@ it('registers a farmer and starts an authenticated session', function () {
 
     $user = User::query()->where('email', 'budi@example.com')->firstOrFail();
 
-    expect(Hash::check('password123', $user->password))->toBeTrue();
+    expect(Hash::check('password123', $user->password))->toBeTrue()
+        ->and($user->phone)->toBe('6281234567890');
     $this->assertAuthenticatedAs($user);
     $this->assertDatabaseHas('user_roles', [
         'user_id' => $user->id,
@@ -100,6 +102,48 @@ it('rejects duplicate email and invalid password confirmation', function () {
         'password_confirmation' => 'berbeda123',
     ])->assertUnprocessable()
         ->assertJsonValidationErrors(['email', 'password']);
+});
+
+it('rejects a WhatsApp number already used by another account', function (string $phone) {
+    User::factory()->create(['phone' => '6281234567890']);
+
+    statefulPost('/api/v1/auth/register', [
+        'name' => 'Pembeli Baru',
+        'email' => 'pembeli-baru@example.com',
+        'phone' => $phone,
+        'location_id' => test()->district->id,
+        'role' => 'buyer',
+        'password' => 'password123',
+        'password_confirmation' => 'password123',
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors('phone')
+        ->assertJsonPath('errors.phone.0', 'Nomor WhatsApp sudah digunakan.');
+
+    $this->assertDatabaseMissing('users', ['email' => 'pembeli-baru@example.com']);
+})->with([
+    'canonical format' => ['6281234567890'],
+    'local equivalent' => ['081234567890'],
+    'international equivalent' => ['+62 812-3456-7890'],
+]);
+
+it('rejects an invalid WhatsApp number', function () {
+    statefulPost('/api/v1/auth/register', [
+        'name' => 'Pembeli Baru',
+        'email' => 'pembeli-baru@example.com',
+        'phone' => '+1 202-555-0123',
+        'location_id' => test()->district->id,
+        'role' => 'buyer',
+        'password' => 'password123',
+        'password_confirmation' => 'password123',
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors('phone');
+});
+
+it('enforces WhatsApp number uniqueness at the database boundary', function () {
+    User::factory()->create(['phone' => '6281234567890']);
+
+    expect(fn () => User::factory()->create(['phone' => '6281234567890']))
+        ->toThrow(QueryException::class);
 });
 
 it('logs in an active user and returns the current user', function () {

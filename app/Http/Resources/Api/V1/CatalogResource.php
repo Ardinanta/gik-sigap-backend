@@ -6,6 +6,7 @@ use App\Models\HarvestPlan;
 use App\Services\CatalogService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
 
 /** @mixin HarvestPlan */
 class CatalogResource extends JsonResource
@@ -44,6 +45,9 @@ class CatalogResource extends JsonResource
             'available_volume_kg' => number_format($available, 2, '.', ''),
             'asking_price_per_kg' => $this->asking_price_per_kg,
             'notes' => $this->notes,
+            'photo_url' => $this->photo_path
+                ? Storage::disk('public')->url($this->photo_path)
+                : null,
             'whatsapp_url' => app(CatalogService::class)->whatsappUrl($this->resource),
         ];
     }
