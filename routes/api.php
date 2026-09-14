@@ -1,5 +1,10 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\AdminDashboardController;
+use App\Http\Controllers\Api\V1\Admin\AdminHarvestPlanController;
+use App\Http\Controllers\Api\V1\Admin\AdminMasterDataController;
+use App\Http\Controllers\Api\V1\Admin\AdminRiskController;
+use App\Http\Controllers\Api\V1\Admin\AdminTransactionController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Auth\PasswordController;
 use App\Http\Controllers\Api\V1\BuyerDemandController;
@@ -61,6 +66,22 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])
             ->whereUuid('notification')
             ->name('api.v1.notifications.read');
+
+        Route::prefix('admin')->middleware('admin')->name('api.v1.admin.')->group(function (): void {
+            Route::get('/dashboard', AdminDashboardController::class)->name('dashboard');
+            Route::get('/harvest-plans', AdminHarvestPlanController::class)->name('harvest-plans.index');
+            Route::get('/risks', [AdminRiskController::class, 'index'])->name('risks.index');
+            Route::get('/risks/{riskAssessment}', [AdminRiskController::class, 'show'])->name('risks.show');
+            Route::patch('/risks/{riskAssessment}/coordination', [AdminRiskController::class, 'coordinate'])->name('risks.coordination.update');
+            Route::get('/transactions', AdminTransactionController::class)->name('transactions.index');
+            Route::get('/master-data', [AdminMasterDataController::class, 'index'])->name('master-data.index');
+            Route::post('/locations', [AdminMasterDataController::class, 'storeLocation'])->name('locations.store');
+            Route::patch('/locations/{location}', [AdminMasterDataController::class, 'updateLocation'])->name('locations.update');
+            Route::post('/fish-sizes', [AdminMasterDataController::class, 'storeFishSize'])->name('fish-sizes.store');
+            Route::patch('/fish-sizes/{fishSize}', [AdminMasterDataController::class, 'updateFishSize'])->name('fish-sizes.update');
+            Route::post('/risk-thresholds', [AdminMasterDataController::class, 'storeThreshold'])->name('risk-thresholds.store');
+            Route::patch('/risk-thresholds/{riskThreshold}', [AdminMasterDataController::class, 'updateThreshold'])->name('risk-thresholds.update');
+        });
 
         Route::prefix('farmer')->name('api.v1.farmer.')->group(function (): void {
             Route::get('/matches', FarmerMatchingController::class)->name('matches.index');
