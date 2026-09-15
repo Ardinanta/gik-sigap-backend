@@ -22,6 +22,8 @@ class DatabaseSeeder extends Seeder
             HarvestPlanSeeder::class,
             BuyerDemandSeeder::class,
             PartnershipSeeder::class,
+            RiskAssessmentSeeder::class,
+            NotificationSeeder::class,
         ]);
     }
 }

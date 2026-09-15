@@ -169,6 +169,23 @@ it('logs in an active user and returns the current user', function () {
         ->assertJsonPath('data.id', $user->id);
 });
 
+it('starts the session when a trusted same-origin proxy omits the origin header', function () {
+    $user = User::factory()->create([
+        'email' => 'proxied-buyer@example.com',
+        'password' => 'password123',
+        'location_id' => test()->district->id,
+    ]);
+    $user->roles()->attach(Role::query()->where('code', 'buyer')->value('id'), ['created_at' => now()]);
+
+    $this->postJson('/api/v1/auth/login', [
+        'email' => 'proxied-buyer@example.com',
+        'password' => 'password123',
+    ])->assertOk()
+        ->assertJsonPath('data.id', $user->id);
+
+    $this->assertAuthenticatedAs($user);
+});
+
 it('rejects invalid credentials and inactive or deleted users', function () {
     User::factory()->create([
         'email' => 'active@example.com',
