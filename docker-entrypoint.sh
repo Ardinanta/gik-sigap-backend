@@ -3,6 +3,10 @@ set -eu
 
 # Railway menyediakan PORT pada runtime; default lokal adalah 80.
 if [ "${1:-}" = "apache2-foreground" ]; then
+    echo 'SIGAP startup: memastikan Apache hanya menggunakan mpm_prefork.'
+    a2dismod -f mpm_event mpm_worker
+    a2enmod mpm_prefork
+
     app_port="${PORT:-80}"
     case "$app_port" in
         ''|*[!0-9]*) echo 'PORT harus berupa angka.' >&2; exit 1 ;;
@@ -21,7 +25,13 @@ if [ "${1:-}" = "apache2-foreground" ]; then
 </VirtualHost>
 EOF
 
-    apache2ctl -t
+    if ! apache2ctl -t; then
+        echo 'Konfigurasi Apache gagal. Direktif MPM aktif:' >&2
+        grep -R -n -E '^[[:space:]]*LoadModule[[:space:]]+mpm_' \
+            /etc/apache2/mods-enabled /etc/apache2/conf-enabled \
+            /etc/apache2/sites-enabled /etc/apache2/apache2.conf >&2 || true
+        exit 1
+    fi
 
     mkdir -p storage/app/public storage/framework/cache/data \
         storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
