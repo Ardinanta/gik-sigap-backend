@@ -7,7 +7,8 @@ ENV APP_ENV=production \
 RUN apt-get update && apt-get install -y --no-install-recommends \
         unzip libpq-dev libonig-dev libzip-dev libicu-dev \
     && docker-php-ext-install -j"$(nproc)" pdo_pgsql mbstring bcmath intl zip opcache \
-    && a2enmod rewrite \
+    && a2dismod -f mpm_event mpm_worker \
+    && a2enmod mpm_prefork rewrite \
     && rm -rf /var/lib/apt/lists/*
 
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
@@ -29,7 +30,8 @@ RUN composer dump-autoload --no-dev --optimize --no-scripts \
         storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache \
     && sed -i 's/\r$//' docker-entrypoint.sh \
-    && chmod +x docker-entrypoint.sh
+    && chmod +x docker-entrypoint.sh \
+    && apache2ctl -t
 
 EXPOSE 80
 ENTRYPOINT ["/var/www/html/docker-entrypoint.sh"]
